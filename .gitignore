@@ -3,3 +3,6 @@ dist/
 .env
 *.log
 .DS_Store
+tokens.json
+test_login.json
+test_register.json
