@@ -11,13 +11,13 @@ const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET as string;
 
 export function signAccessToken(payload: TokenPayload): string {
   return jwt.sign(payload, ACCESS_SECRET, {
-    expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+    expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN as any) || '15m',
   });
 }
 
 export function signRefreshToken(payload: TokenPayload): string {
   return jwt.sign(payload, REFRESH_SECRET, {
-    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+    expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN as any) || '7d',
     jwtid: uuidv4(),
   });
 }
