@@ -24,11 +24,17 @@ seguro para su app/web y no quieren (o no saben) implementarlo desde cero.
 - [x] Middleware de autenticación (protege rutas)
 - [x] Roles básicos (`user` / `admin`)
 - [x] Rate limiting en `/login` (anti fuerza bruta)
-- [ ] Tests del flujo principal ← **tu próxima tarea**
-- [ ] Deploy con demo en vivo (Render/Railway) ← **después de tests**
+- [x] Tests del flujo principal
+- [x] Deploy con demo en vivo (Render + Neon)
 
 **Fuera de alcance en v1** (anótalo para v2, no lo agregues ahora):
 recuperación de contraseña por email, OAuth social login, 2FA.
+
+## Demo en Vivo
+
+🚀 **API Pública:** `https://zagu-n.onrender.com`
+
+> **Nota sobre Cold-Start:** Este servicio está alojado en el nivel gratuito de Render. Si no recibe peticiones durante 15 minutos, el servidor entra en suspensión (spin-down). La primera petición después de un rato puede tardar ~50 segundos en responder mientras el servidor se despierta. Las siguientes peticiones serán instantáneas.
 
 ## Cómo levantar el proyecto
 
