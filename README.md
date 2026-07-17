@@ -1,88 +1,234 @@
-# Zaguán 🚪
+# Zaguán Auth 🚪
 
-> El zaguán es la entrada de la casa: el punto que controla quién pasa y quién no.
-> Un servicio de autenticación reusable — JWT + refresh tokens + roles — listo para
-> integrarse en cualquier backend.
+> **Stateless JWT authentication microservice** with refresh token rotation, role-based access control, and brute-force protection — designed to be embedded into any Node.js backend or run as a standalone auth service.
 
-## Brief del producto
+---
 
-**Problema que resuelve:** casi todo backend necesita login seguro, pero implementarlo
-bien (hash correcto, rotación de refresh tokens, rate limiting anti fuerza bruta, roles)
-toma tiempo y es fácil hacerlo mal. Zaguán es ese módulo, ya hecho bien, listo para
-integrar o para ofrecer como servicio a clientes.
+## Why Another Auth Service?
 
-**A quién se lo vendes:** startups o negocios chicos que necesitan un sistema de login
-seguro para su app/web y no quieren (o no saben) implementarlo desde cero.
+Most teams reach for Auth0, Clerk, or Firebase Auth without asking whether they actually need a managed SaaS — and then discover the pricing cliff at scale or the inflexibility when custom claims are required.
 
-## Alcance del MVP (v1)
+Zaguán takes the opposite approach: **own your auth layer, keep it small, keep it auditable**. The implementation surface is intentionally minimal so any engineer on the team can fully understand every line running in production. That's not a limitation — it's the design goal.
 
-- [x] Registro de usuario (email + password, hash con bcrypt)
-- [x] Login → access token (corto) + refresh token (largo, guardado hasheado en DB)
-- [x] Endpoint de renovación de token con **rotación** de refresh token (más seguro:
-      cada refresh token solo se usa una vez)
-- [x] Logout (revoca el refresh token)
-- [x] Middleware de autenticación (protege rutas)
-- [x] Roles básicos (`user` / `admin`)
-- [x] Rate limiting en `/login` (anti fuerza bruta)
-- [x] Tests del flujo principal
-- [x] Deploy con demo en vivo (Render + Neon)
+**What it solves:**
+- Secure password hashing (bcrypt, configurable cost factor)
+- Short-lived access tokens + long-lived, single-use refresh tokens with automatic rotation
+- Revocable sessions stored **hashed** in PostgreSQL — no plain tokens at rest, ever
+- Role-based middleware ready to protect any Express route
+- Rate limiting on login endpoints to mitigate credential-stuffing attacks
 
-**Fuera de alcance en v1** (anótalo para v2, no lo agregues ahora):
-recuperación de contraseña por email, OAuth social login, 2FA.
+---
 
-## Demo en Vivo
+## Live Demo
 
-🚀 **API Pública:** `https://zagu-n.onrender.com`
+🚀 **Base URL:** `https://zagu-n.onrender.com`
 
-> **Nota sobre Cold-Start:** Este servicio está alojado en el nivel gratuito de Render. Si no recibe peticiones durante 15 minutos, el servidor entra en suspensión (spin-down). La primera petición después de un rato puede tardar ~50 segundos en responder mientras el servidor se despierta. Las siguientes peticiones serán instantáneas.
+> **Cold-start notice:** Hosted on Render's free tier. First request after ~15 min of inactivity may take up to 50 s while the instance warms up. Subsequent requests are immediate.
 
-## Cómo levantar el proyecto
+---
 
-1. Instala dependencias:
-   ```bash
-   npm install
-   ```
-2. Crea una base de datos PostgreSQL local y copia `.env.example` a `.env`,
-   completando `DATABASE_URL` y generando dos secretos JWT distintos
-   (puedes generarlos con `openssl rand -hex 32`).
-3. Corre la migración inicial:
-   ```bash
-   psql $DATABASE_URL -f migrations/001_create_users.sql
-   ```
-4. Levanta el servidor en modo desarrollo:
-   ```bash
-   npm run dev
-   ```
-5. Verifica que esté vivo:
-   ```bash
-   curl http://localhost:3000/health
-   ```
+## Architecture
 
-## Endpoints
+```
+┌─────────────────────────────────────────────────┐
+│                  Express App                    │
+│                                                 │
+│  POST /auth/register  →  hash → insert user     │
+│  POST /auth/login     →  verify → issue tokens  │
+│  POST /auth/refresh   →  rotate refresh token   │
+│  POST /auth/logout    →  revoke refresh token   │
+│  GET  /auth/me        →  validate Bearer JWT    │
+│                                                 │
+│  Middleware: authenticate · authorize(role)     │
+│  Middleware: rate-limit (express-rate-limit)    │
+└─────────────────┬───────────────────────────────┘
+                  │
+        ┌─────────▼─────────┐
+        │    PostgreSQL      │
+        │  users             │
+        │  refresh_tokens    │
+        └────────────────────┘
+```
 
-| Método | Ruta            | Auth requerida | Descripción                          |
-|--------|-----------------|----------------|---------------------------------------|
-| POST   | `/auth/register`| No             | Crea un usuario nuevo                 |
-| POST   | `/auth/login`    | No             | Devuelve accessToken + refreshToken   |
-| POST   | `/auth/refresh`  | No (usa refreshToken en body) | Rota tokens          |
-| POST   | `/auth/logout`   | No (usa refreshToken en body) | Revoca el refresh token |
-| GET    | `/auth/me`       | Sí (Bearer)    | Devuelve el usuario autenticado       |
+**Token lifecycle:**
+1. `POST /auth/login` → issues `accessToken` (15 min) + `refreshToken` (7 days, stored hashed)
+2. `POST /auth/refresh` → validates token hash, **immediately invalidates it**, issues a new pair
+3. `POST /auth/logout` → hard-revokes the refresh token; subsequent refresh attempts return `401`
 
-## Próximos pasos (en orden — como CTO, este es tu roadmap real)
+This design means token theft *during* a refresh is detectable: a second use of the same refresh token creates a hash conflict and can trigger full session revocation as an escalation policy.
 
-1. **Corre el proyecto localmente** y prueba los 5 endpoints con Postman/Thunder Client
-   o `curl`. No sigas al paso 2 hasta que los 5 funcionen sin errores.
-2. **Escribe tests** con Vitest + Supertest para: registro exitoso, registro con email
-   duplicado, login exitoso, login con password incorrecto, acceso a `/me` sin token
-   (debe fallar), acceso a `/me` con token válido (debe funcionar).
-3. **Sube el repo a GitHub** con este README (edítalo con capturas de las pruebas
-   cuando tengas Postman/Thunder Client corriendo).
-4. **Haz deploy** en Render o Railway (tienen tier gratuito) + una base de datos
-   Postgres gratuita (Neon o Supabase). Esto te da el "demo en vivo" que hace que
-   un cliente confíe con solo ver el link.
-5. Recién ahí, vuelve conmigo y armamos tu descripción de servicio para Upwork/Fiverr
-   usando este proyecto como prueba.
+---
 
-## Stack
+## Tech Stack
 
-Node.js · TypeScript · Express · PostgreSQL · JWT · bcrypt · Zod (validación) · Vitest (tests)
+| Layer | Choice | Rationale |
+|---|---|---|
+| Runtime | Node.js 20 LTS | Long-term support, native ESM |
+| Language | TypeScript 5 | Type safety across the auth boundary |
+| Framework | Express 4 | Mature, minimal, well-understood operational profile |
+| Database | PostgreSQL 15 | ACID guarantees for token revocation semantics |
+| Driver | `pg` (raw SQL) | No ORM magic, full control over query plans |
+| Validation | Zod | Schema-first, parse-don't-validate at every API boundary |
+| Hashing | bcrypt | Industry standard for password hashing |
+| JWT | `jsonwebtoken` | RFC 7519 compliant, configurable algorithms |
+| Tests | Vitest + Supertest | Fast, ESM-native, integration-level coverage |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js ≥ 20
+- PostgreSQL ≥ 14 (local or cloud — [Neon](https://neon.tech) works well for free-tier dev)
+
+### Local Setup
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure environment
+cp .env.example .env
+# Fill in DATABASE_URL and generate two independent JWT secrets:
+#   openssl rand -hex 32  →  ACCESS_TOKEN_SECRET
+#   openssl rand -hex 32  →  REFRESH_TOKEN_SECRET
+
+# 3. Run the migration
+psql $DATABASE_URL -f migrations/001_create_users.sql
+
+# 4. Start the dev server (ts-node-dev, hot reload)
+npm run dev
+
+# 5. Smoke test
+curl http://localhost:3000/health
+```
+
+---
+
+## API Reference
+
+### `POST /auth/register`
+Creates a new user. Password is hashed before storage — the plain-text value never touches the database layer.
+
+```json
+// Request
+{ "email": "user@example.com", "password": "min8chars" }
+
+// 201 Created
+{ "message": "User created" }
+```
+
+---
+
+### `POST /auth/login`
+Authenticates credentials and issues a token pair. Rate-limited to **10 attempts / 15 min per IP**.
+
+```json
+// Request
+{ "email": "user@example.com", "password": "min8chars" }
+
+// 200 OK
+{
+  "accessToken":  "<JWT — expires in 15 min>",
+  "refreshToken": "<opaque token — valid 7 days, single-use>"
+}
+```
+
+---
+
+### `POST /auth/refresh`
+Rotates the refresh token. The submitted token is **invalidated immediately** — by design, even if the response is dropped in transit.
+
+```json
+// Request
+{ "refreshToken": "<current refresh token>" }
+
+// 200 OK
+{
+  "accessToken":  "<new JWT>",
+  "refreshToken": "<new refresh token>"
+}
+```
+
+---
+
+### `POST /auth/logout`
+Revokes the refresh token, ending the session server-side.
+
+```json
+// Request
+{ "refreshToken": "<token to revoke>" }
+
+// 200 OK
+{ "message": "Logged out" }
+```
+
+---
+
+### `GET /auth/me`
+Returns the authenticated user's profile. Requires a valid access token.
+
+```
+Authorization: Bearer <accessToken>
+```
+
+```json
+// 200 OK
+{ "id": 1, "email": "user@example.com", "role": "user" }
+```
+
+---
+
+## Endpoint Summary
+
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| POST | `/auth/register` | — | Register new user |
+| POST | `/auth/login` | — | Authenticate, receive token pair |
+| POST | `/auth/refresh` | — | Rotate refresh token |
+| POST | `/auth/logout` | — | Revoke refresh token |
+| GET | `/auth/me` | Bearer JWT | Get current user |
+| GET | `/health` | — | Liveness probe |
+
+---
+
+## Running Tests
+
+```bash
+npm test
+```
+
+Coverage: registration, duplicate email rejection, login success/failure, protected route access with and without valid token, and refresh token rotation integrity (reuse attempt returns 401).
+
+---
+
+## Deployment
+
+The service is **stateless at the process level** — horizontal scaling is safe as long as all instances share the same PostgreSQL instance. Deploy behind any reverse proxy (nginx, Caddy) or on any PaaS that supports Node.js.
+
+**Required environment variables:**
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `ACCESS_TOKEN_SECRET` | Signing secret for access JWTs |
+| `REFRESH_TOKEN_SECRET` | Signing secret for refresh JWTs |
+| `PORT` | Server port (default: `3000`) |
+
+---
+
+## Roadmap
+
+- [ ] Password reset via email (SMTP / Resend)
+- [ ] OAuth 2.0 social login (Google, GitHub)
+- [ ] TOTP-based two-factor authentication
+- [ ] Audit log table for security events
+- [ ] Admin endpoint to list and revoke active sessions
+- [ ] OpenAPI 3.1 spec + Swagger UI
+
+---
+
+## License
+
+MIT
