@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 
 interface TokenPayload {
   userId: string;
@@ -18,7 +18,7 @@ export function signAccessToken(payload: TokenPayload): string {
 export function signRefreshToken(payload: TokenPayload): string {
   return jwt.sign(payload, REFRESH_SECRET, {
     expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN as any) || '7d',
-    jwtid: uuidv4(),
+    jwtid: crypto.randomUUID(),
   });
 }
 
