@@ -218,6 +218,12 @@ The service is **stateless at the process level** — horizontal scaling is safe
 
 ---
 
+## Known Limitations
+
+- **`Server: cloudflare` Header Disclosure**: Security scanners might flag the presence of the `Server: cloudflare` HTTP header. This header is added automatically by the hosting infrastructure (Render/Cloudflare) at the network layer and is completely outside the control of the application code. Standard Node.js mitigations (like Helmet) cannot suppress it because the header is injected after the response leaves our process.
+
+---
+
 ## Roadmap
 
 - [ ] Password reset via email (SMTP / Resend)
