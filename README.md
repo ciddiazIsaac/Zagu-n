@@ -221,6 +221,7 @@ The service is **stateless at the process level** — horizontal scaling is safe
 ## Known Limitations
 
 - **`Server: cloudflare` Header Disclosure**: Security scanners might flag the presence of the `Server: cloudflare` HTTP header. This header is added automatically by the hosting infrastructure (Render/Cloudflare) at the network layer and is completely outside the control of the application code. Standard Node.js mitigations (like Helmet) cannot suppress it because the header is injected after the response leaves our process.
+- **CI/CD Propagation Delay (Free Tier)**: After pushing changes to the repository, Render requires several minutes to install dependencies, run the build step, and perform a health check before routing traffic to the new instance. If you run security scans immediately after a git push, you will hit the old instance and receive false positives (e.g., missing security headers). Always verify the deploy status in the Render dashboard before auditing.
 
 ---
 
